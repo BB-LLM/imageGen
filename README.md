@@ -192,4 +192,3 @@ python -m pytest app/test/ --cov=app
 - `POST /api/tasks/{task_id}/cancel` - Cancel a task
 - `GET /api/image/variant/{variant_id}/mark-seen` - Mark variant as seen
 - `GET /health` - Health check
-

@@ -1,6 +1,6 @@
-# Soul MVP - AI Character Image Generation System
+# Soul - AI Character Image & GIF Generation System
 
-FastAPI-based AI image generation system with intelligent deduplication and user-specific variant delivery.
+FastAPI-based AI image and video generation system with intelligent deduplication, user-specific variant delivery, and image-to-GIF conversion capabilities.
 
 ## 📁 Project Structure
 
@@ -9,6 +9,7 @@ soul/
 ├── app/
 │   ├── api/              # API routes
 │   │   ├── routes_image.py      # Image generation endpoints
+│   │   ├── routes_video.py      # Video/GIF generation endpoints
 │   │   ├── routes_tasks.py      # Task management endpoints
 │   │   ├── routes_style.py      # Style-specific endpoints
 │   │   └── routes_static.py     # Static file serving
@@ -23,15 +24,21 @@ soul/
 │   │   └── dal.py               # Data access layer
 │   ├── logic/
 │   │   ├── service_image.py     # Core image service
+│   │   ├── service_video.py     # Video/GIF generation service
 │   │   ├── prompt_cache.py      # Prompt normalization and caching
 │   │   ├── place_chooser.py    # Selfie location selection
 │   │   └── ai_model_service.py # AI model wrapper
+│   ├── model/                   # AI models directory
+│   │   ├── sdXL_v10VAEFix.safetensors  # SDXL model
+│   │   └── test_svd.py          # SVD testing script
 │   ├── config.py                # Configuration management
 │   └── test/                    # Test suite
 ├── static/                      # Frontend files
 │   ├── index.html
 │   ├── script.js
 │   └── style.css
+├── generated_images/            # Generated image files
+├── generated_videos/            # Generated video and GIF files
 ├── main.py                      # FastAPI application entry
 ├── init_db.py                   # Database initialization
 ├── start_server.py              # Server startup script
@@ -114,6 +121,15 @@ DEVICE_MEMORY_FRACTION=0.8
 # Task Queue Settings
 MAX_CONCURRENT_TASKS=1
 LOG_LEVEL=INFO
+
+# SVD (Stable Video Diffusion) Settings (Optional)
+SVD_MODEL_ID=stabilityai/stable-video-diffusion-img2vid-xt
+SVD_OUTPUT_DIR=generated_videos
+SVD_NUM_FRAMES=25
+SVD_FPS=7
+SVD_IMAGE_WIDTH=1024
+SVD_IMAGE_HEIGHT=576
+SVD_ESTIMATED_SECONDS_PER_FRAME=2.0
 ```
 
 ### 6. Initialize Database
@@ -124,15 +140,23 @@ python init_db.py
 
 This will create all necessary tables in the database.
 
-### 7. Download AI Model
+### 7. Download AI Models
 
-Place your Stable Diffusion XL model in `app/model/` directory:
+Place your AI models in `app/model/` directory:
+
+**Stable Diffusion XL Model (Required for image generation):**
 ```bash
 # Example: Download from Civitai https://civitai.com/models/101055/sd-xl
 # Place sdXL_v10VAEFix.safetensors in app/model/
 ```
 
-**Note**: If no model is provided, the system will run in simulation mode.
+**Stable Video Diffusion Model (Optional, for GIF generation):**
+The SVD model will be automatically downloaded from Hugging Face when first used:
+- Model: `stabilityai/stable-video-diffusion-img2vid-xt`
+
+**Note**: 
+- If no SDXL model is provided, the system will run in simulation mode
+- SVD model will be downloaded automatically on first use
 
 ## 🚀 Running the Server
 
@@ -157,7 +181,8 @@ python start_server.py
 Access the application:
 - **Web Interface**: http://localhost:8000
 - **API Documentation**: http://localhost:8000/docs
-- **Health Check**: http://localhost:8000/health
+- **Health Check**: http://localhost:8000/healthz
+- **Readiness Check**: http://localhost:8000/ready
 
 ## 🧪 Running Tests
 
@@ -181,14 +206,108 @@ python -m pytest app/test/ --cov=app
 | `DATABASE_URL` | `postgresql://mvpdbuser:mvpdbpw@localhost:5432/mvpdb` | Database connection string |
 | `FORCE_CPU` | `false` | Force CPU-only mode |
 | `DEVICE_MEMORY_FRACTION` | `0.8` | GPU memory fraction to use |
-| `MAX_CONCURRENT_TASKS` | `1` | Maximum concurrent image generation tasks |
+| `MAX_CONCURRENT_TASKS` | `1` | Maximum concurrent generation tasks |
 | `LOG_LEVEL` | `INFO` | Logging level |
+| `SVD_MODEL_ID` | `stabilityai/stable-video-diffusion-img2vid-xt` | SVD model identifier |
+| `SVD_NUM_FRAMES` | `25` | Number of frames to generate |
+| `SVD_FPS` | `7` | Frame rate for video/GIF |
+| `SVD_IMAGE_WIDTH` | `1024` | Input image width |
+| `SVD_IMAGE_HEIGHT` | `576` | Input image height |
+| `SVD_ESTIMATED_SECONDS_PER_FRAME` | `2.0` | Estimated seconds per frame for time estimation |
 
-### API Endpoints
+## 📡 API Endpoints
 
-- `POST /api/image/generate` - Generate a styled image
-- `POST /api/image/selfie` - Generate a selfie
-- `GET /api/tasks/{task_id}` - Get task status
-- `POST /api/tasks/{task_id}/cancel` - Cancel a task
-- `GET /api/image/variant/{variant_id}/mark-seen` - Mark variant as seen
-- `GET /health` - Health check
+### Image Generation
+
+- `GET /image` - Generate a styled image
+  - Query params: `soul_id`, `cue`, `user_id`
+- `POST /image/selfie` - Generate a selfie
+  - Body: `{soul_id, city_key, mood, user_id}`
+- `POST /image/mark-seen` - Mark variant as seen
+  - Query params: `variant_id`, `user_id`
+- `GET /image/variants/{pk_id}` - Get all variants by prompt key
+- `GET /image/user/{user_id}/seen` - Get user's seen variants
+
+### Video/GIF Generation
+
+- `GET /video/estimate` - Estimate GIF generation time
+  - Query params: `num_frames` (optional)
+- `POST /video/generate` - Generate video and GIF from image
+  - Body: `{image_path, num_frames?, generate_gif?}`
+- `POST /video/generate-from-variant` - Generate GIF from variant ID
+  - Query params: `variant_id`, `num_frames?`, `generate_gif?`
+
+### Task Management
+
+- `GET /tasks/{task_id}` - Get task status
+- `DELETE /tasks/{task_id}` - Cancel a task
+- `GET /tasks` - List tasks (with filtering)
+- `GET /tasks/stats/summary` - Get task statistics
+
+### Style Configuration
+
+- `POST /style` - Create or update style profile
+- `GET /style/{soul_id}` - Get style profile
+- `DELETE /style/{soul_id}` - Delete style profile
+- `GET /style` - List all styles
+
+### Static Files
+
+- `GET /static/image/{filename}` - Get generated image
+- `GET /static/videos/{filename}` - Get generated video/GIF
+- `GET /static/images` - List all generated images
+- `GET /generated/{filename}` - Direct access to generated images
+
+### Health & Info
+
+- `GET /healthz` - Health check
+- `GET /ready` - Readiness check
+- `GET /info` - Application information
+- `GET /docs` - Interactive API documentation (Swagger UI)
+
+## Usage Examples
+
+### Generate an Image
+
+**Via Web Interface:**
+1. Select a Soul character
+2. Enter a prompt (cue)
+3. Click "Generate"
+4. Click "Transform to GIF" button to convert to animated GIF
+
+**Via API:**
+```bash
+# Generate image
+curl "http://localhost:8000/image?soul_id=nova&cue=penguin&user_id=user123"
+
+# Convert to GIF (after image generation)
+curl -X POST http://localhost:8000/video/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "image_path": "generated_images/nova_xxx.png",
+    "generate_gif": true
+  }'
+```
+
+### Estimate GIF Generation Time
+
+```bash
+curl http://localhost:8000/video/estimate?num_frames=25
+```
+
+Response:
+```json
+{
+  "estimated_seconds": 52.0,
+  "estimated_minutes": 0.9,
+  "video_generation_seconds": 50.0,
+  "gif_conversion_seconds": 2.0,
+  "num_frames": 25
+}
+```
+
+### Generate GIF from Variant ID
+
+```bash
+curl -X POST "http://localhost:8000/video/generate-from-variant?variant_id=01K8XXX&generate_gif=true"
+```

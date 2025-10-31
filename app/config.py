@@ -49,6 +49,19 @@ class Config:
     GIF_FRAME_COUNT: int = int(os.getenv("GIF_FRAME_COUNT", "8"))
     GIF_DURATION: float = float(os.getenv("GIF_DURATION", "0.5"))
     
+    # SVD (Stable Video Diffusion) 图生视频配置
+    SVD_MODEL_ID: str = os.getenv("SVD_MODEL_ID", "stabilityai/stable-video-diffusion-img2vid-xt")
+    SVD_OUTPUT_DIR: str = os.getenv("SVD_OUTPUT_DIR", "generated_videos")
+    SVD_NUM_FRAMES: int = int(os.getenv("SVD_NUM_FRAMES", "25"))
+    SVD_DECODE_CHUNK_SIZE: int = int(os.getenv("SVD_DECODE_CHUNK_SIZE", "8"))
+    SVD_MOTION_BUCKET_ID: int = int(os.getenv("SVD_MOTION_BUCKET_ID", "100"))
+    SVD_NOISE_AUG_STRENGTH: float = float(os.getenv("SVD_NOISE_AUG_STRENGTH", "0.1"))
+    SVD_FPS: int = int(os.getenv("SVD_FPS", "7"))
+    SVD_IMAGE_WIDTH: int = int(os.getenv("SVD_IMAGE_WIDTH", "1024"))
+    SVD_IMAGE_HEIGHT: int = int(os.getenv("SVD_IMAGE_HEIGHT", "576"))
+    # 预估生成时间（秒/帧）- 用于计算预估时间
+    SVD_ESTIMATED_SECONDS_PER_FRAME: float = float(os.getenv("SVD_ESTIMATED_SECONDS_PER_FRAME", "2.0"))
+    
     # 设备配置
     FORCE_CPU: bool = os.getenv("FORCE_CPU", "False").lower() == "true"
     DEVICE_MEMORY_FRACTION: float = float(os.getenv("DEVICE_MEMORY_FRACTION", "0.8"))
@@ -96,6 +109,23 @@ class Config:
             "gif_duration": cls.GIF_DURATION,
             "force_cpu": cls.FORCE_CPU,
             "device_memory_fraction": cls.DEVICE_MEMORY_FRACTION
+        }
+    
+    @classmethod
+    def get_svd_config(cls) -> dict:
+        """获取SVD图生视频配置"""
+        return {
+            "model_id": cls.SVD_MODEL_ID,
+            "output_dir": cls.SVD_OUTPUT_DIR,
+            "num_frames": cls.SVD_NUM_FRAMES,
+            "decode_chunk_size": cls.SVD_DECODE_CHUNK_SIZE,
+            "motion_bucket_id": cls.SVD_MOTION_BUCKET_ID,
+            "noise_aug_strength": cls.SVD_NOISE_AUG_STRENGTH,
+            "fps": cls.SVD_FPS,
+            "image_width": cls.SVD_IMAGE_WIDTH,
+            "image_height": cls.SVD_IMAGE_HEIGHT,
+            "estimated_seconds_per_frame": cls.SVD_ESTIMATED_SECONDS_PER_FRAME,
+            "force_cpu": cls.FORCE_CPU
         }
     
     @classmethod

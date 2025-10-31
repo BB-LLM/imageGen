@@ -13,3 +13,7 @@ sentence-transformers==5.1.1
 numpy==2.2.6
 diffusers==0.35.2
 transformers==4.57.1
+opencv-python==4.12.0.88
+accelerate==1.11.0
+imageio==2.34.0
+imageio-ffmpeg==0.5.1

@@ -15,6 +15,9 @@ from ..data.models import VariantBase
 from ..core.lww import now_ms
 from ..core.ids import generate_ulid, generate_lock_key
 from ..core.locks import with_lock
+
+# 全局锁键 - 防止同时生成图片和视频
+GLOBAL_GENERATION_LOCK_KEY = "global:generation"
 from ..core.task_manager import TaskManager, TaskType, BackgroundTask
 from .prompt_cache import PromptCache, PromptBuilder
 from .place_chooser import PlaceChooser
@@ -64,42 +67,44 @@ class ImageGenerationService:
         # 生成锁键（基于 soul_id + cue 确保同一提示词串行）
         lock_key = f"{soul_id}|{cue}"
         
-        # 使用进程内锁确保相同的提示词串行执行
-        async with with_lock(lock_key):
-            # 1. 查找相似的提示词键
-            similar_pk = self.prompt_cache.find_similar_prompt_key(db, soul_id, cue)
-            
-            if similar_pk:
-                # 2. 获取现有变体
-                existing_variants = VariantDAL.list_by_pk_id(db, similar_pk.pk_id)
+        # 首先获取全局锁，防止与视频生成同时进行
+        async with with_lock(GLOBAL_GENERATION_LOCK_KEY):
+            # 然后获取提示词锁，确保相同的提示词串行执行
+            async with with_lock(lock_key):
+                # 1. 查找相似的提示词键
+                similar_pk = self.prompt_cache.find_similar_prompt_key(db, soul_id, cue)
                 
-                # 3. 获取用户已看过的变体
-                user_seen_variants = UserSeenDAL.get_seen_variants(db, user_id)
-                
-                # 4. 过滤未看过的变体
-                unseen_variants = [
-                    v for v in existing_variants 
-                    if v.variant_id not in user_seen_variants
-                ]
-                
-                if unseen_variants:
-                    # 5. 选择最佳变体（最新的）
-                    best_variant = max(unseen_variants, key=lambda v: v.updated_at_ts)
+                if similar_pk:
+                    # 2. 获取现有变体
+                    existing_variants = VariantDAL.list_by_pk_id(db, similar_pk.pk_id)
                     
-                    # 立即标记为已看，防止后续请求返回同一变体
-                    UserSeenDAL.mark_seen(db, user_id, best_variant.variant_id)
+                    # 3. 获取用户已看过的变体
+                    user_seen_variants = UserSeenDAL.get_seen_variants(db, user_id)
                     
-                    return {
-                        "url": best_variant.asset_url,
-                        "variant_id": best_variant.variant_id,
-                        "pk_id": best_variant.pk_id,
-                        "cache_hit": True
-                    }
-            
-            # 7. 需要生成新变体
-            result = await self._generate_new_variant(db, soul_id, cue, user_id, similar_pk)
-            # 返回结果时仍在锁内，确保后续任务看不到
-            return result
+                    # 4. 过滤未看过的变体
+                    unseen_variants = [
+                        v for v in existing_variants 
+                        if v.variant_id not in user_seen_variants
+                    ]
+                    
+                    if unseen_variants:
+                        # 5. 选择最佳变体（最新的）
+                        best_variant = max(unseen_variants, key=lambda v: v.updated_at_ts)
+                        
+                        # 立即标记为已看，防止后续请求返回同一变体
+                        UserSeenDAL.mark_seen(db, user_id, best_variant.variant_id)
+                        
+                        return {
+                            "url": best_variant.asset_url,
+                            "variant_id": best_variant.variant_id,
+                            "pk_id": best_variant.pk_id,
+                            "cache_hit": True
+                        }
+                
+                # 7. 需要生成新变体
+                result = await self._generate_new_variant(db, soul_id, cue, user_id, similar_pk)
+                # 返回结果时仍在锁内，确保后续任务看不到
+                return result
     
     async def _generate_new_variant(
         self, 

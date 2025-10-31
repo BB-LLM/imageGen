@@ -215,8 +215,11 @@ class SoulApp {
         // 检查是否已经有任务卡片在显示
         const existingTasks = container.querySelector('.tasks-container');
         
+        // 生成唯一ID用于按钮绑定
+        const resultId = `result-${result.variant_id || Date.now()}`;
+        
         let resultHtml = `
-            <div class="result-item">
+            <div class="result-item" id="${resultId}">
                 <img src="${result.url}" alt="Generated image" class="result-image" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDQwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjRjNGNEY2Ii8+Cjx0ZXh0IHg9IjIwMCIgeT0iMTUwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjOUNBM0FGIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiPkp1c3QgYSBxdWljayBsb2FkaW5nIHBsYWNlaG9sZGVyPC90ZXh0Pgo8L3N2Zz4='">
                 <div class="result-info">
                     <h4>Generation Result</h4>
@@ -234,6 +237,14 @@ class SoulApp {
         
         resultHtml += `
                     <p><strong>Cache Hit:</strong> ${result.cache_hit ? 'Yes' : 'No'}</p>
+                    <div class="result-actions">
+                        <button class="btn-convert-gif" id="convert-gif-btn-${result.variant_id}" 
+                                onclick="app.convertToGif('${result.variant_id}', '${result.url}')">
+                            <i class="fas fa-video"></i> Transform to GIF
+                        </button>
+                        <div id="gif-estimate-${result.variant_id}" class="gif-estimate" style="display: none;"></div>
+                    </div>
+                    <div id="gif-result-${result.variant_id}" class="gif-result" style="display: none;"></div>
                 </div>
             </div>
         `;
@@ -273,6 +284,174 @@ class SoulApp {
             }
         } catch (error) {
             console.warn(`Error marking variant ${variantId} as seen:`, error);
+        }
+    }
+    
+    async convertToGif(variantId, imageUrl) {
+        try {
+            // 禁用按钮并显示加载状态
+            const convertBtn = document.getElementById(`convert-gif-btn-${variantId}`);
+            const estimateDiv = document.getElementById(`gif-estimate-${variantId}`);
+            const resultDiv = document.getElementById(`gif-result-${variantId}`);
+            
+            if (!convertBtn || !estimateDiv || !resultDiv) {
+                console.error('Cannot find convert GIF elements');
+                return;
+            }
+            
+            const originalText = convertBtn.innerHTML;
+            convertBtn.disabled = true;
+            convertBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+            
+            // 1. 首先获取预估时间
+            try {
+                const estimateResponse = await fetch(`${this.apiBaseUrl}/video/estimate`);
+                if (estimateResponse.ok) {
+                    const estimate = await estimateResponse.json();
+                    estimateDiv.style.display = 'block';
+                    estimateDiv.innerHTML = `
+                        <div class="estimate-info">
+                            <i class="fas fa-clock"></i>
+                            <span>Estimated time: ${estimate.estimated_minutes} minutes (${estimate.estimated_seconds} seconds)</span>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.warn('Failed to get estimate:', error);
+            }
+            
+            // 2. 构建图像路径（优先使用variant_id从数据库获取真实路径）
+            let imagePath = null;
+            
+            // 首先尝试使用variant_id获取真实路径（推荐方式）
+            try {
+                const variantResponse = await fetch(`${this.apiBaseUrl}/image/variants/${variantId}`);
+                if (variantResponse.ok) {
+                    const variantData = await variantResponse.json();
+                    if (variantData.variants && variantData.variants.length > 0) {
+                        const variant = variantData.variants[0];
+                        // 从meta中获取local_filepath，这是真实路径
+                        if (variant.meta && variant.meta.local_filepath) {
+                            imagePath = variant.meta.local_filepath;
+                        } else {
+                            // 如果没有local_filepath，从URL转换
+                            const url = variant.url || imageUrl;
+                            if (url) {
+                                // 将 /generated/xxx.png 转换为 generated_images/xxx.png
+                                if (url.startsWith('/generated/')) {
+                                    const filename = url.replace('/generated/', '');
+                                    imagePath = `generated_images/${filename}`;
+                                } else if (url.startsWith('/')) {
+                                    imagePath = url.substring(1);
+                                } else {
+                                    imagePath = url;
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.warn('Failed to get variant info:', error);
+            }
+            
+            // 如果从variant_id获取失败，尝试从imageUrl解析
+            if (!imagePath) {
+                // 从URL中提取路径
+                if (imageUrl.startsWith('http')) {
+                    const urlObj = new URL(imageUrl);
+                    imagePath = urlObj.pathname;
+                } else {
+                    imagePath = imageUrl;
+                }
+                
+                // 移除前导斜杠
+                if (imagePath.startsWith('/')) {
+                    imagePath = imagePath.substring(1);
+                }
+                
+                // 将 /generated/ 转换为 generated_images/
+                if (imagePath.startsWith('generated/')) {
+                    imagePath = imagePath.replace('generated/', 'generated_images/');
+                } else if (!imagePath.startsWith('generated_images/')) {
+                    // 如果路径不包含目录，假设它在generated_images目录下
+                    const filename = imagePath.split('/').pop();
+                    imagePath = `generated_images/${filename}`;
+                }
+            }
+            
+            console.log('Using image path:', imagePath);
+            
+            // 3. 调用视频生成API
+            convertBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating GIF...';
+            
+            const response = await fetch(`${this.apiBaseUrl}/video/generate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    image_path: imagePath,
+                    generate_gif: true
+                })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+                throw new Error(errorData.detail || 'Failed to generate GIF');
+            }
+            
+            const result = await response.json();
+            
+            // 4. 显示结果
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = `
+                <div class="gif-success">
+                    <h5><i class="fas fa-check-circle"></i> GIF generated successfully!</h5>
+                    <div class="gif-preview">
+                        <img src="${result.gif_url}" alt="Generated GIF" class="gif-image" />
+                    </div>
+                    <div class="gif-info">
+                        <p><strong>File size:</strong> ${result.gif_size_mb} MB</p>
+                        <p><strong>Frame count:</strong> ${result.num_frames}</p>
+                        <p><strong>Frame rate:</strong> ${result.fps} fps</p>
+                        <p><strong>Total time:</strong> ${result.total_seconds} seconds</p>
+                        <a href="${result.gif_url}" download="${result.gif_filename}" class="btn-download-gif">
+                            <i class="fas fa-download"></i> Download GIF
+                        </a>
+                    </div>
+                </div>
+            `;
+            
+            // 恢复按钮（但标记为已完成）
+            convertBtn.innerHTML = '<i class="fas fa-check"></i> Generated successfully';
+            convertBtn.style.opacity = '0.6';
+            
+            this.updateStatus('GIF generated successfully!', 'success');
+            
+        } catch (error) {
+            console.error('Failed to convert to GIF:', error);
+            
+            const convertBtn = document.getElementById(`convert-gif-btn-${variantId}`);
+            const resultDiv = document.getElementById(`gif-result-${variantId}`);
+            
+            if (convertBtn) {
+                convertBtn.disabled = false;
+                convertBtn.innerHTML = '<i class="fas fa-video"></i> Transform to GIF';
+            }
+            
+            if (resultDiv) {
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = `
+                    <div class="gif-error">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>Failed to generate GIF: ${error.message}</p>
+                        ${error.message.includes('409') || error.message.includes('The system is processing other tasks, please try again later') ? 
+                            '<p class="error-hint">The system is processing other tasks, please try again later</p>' : ''}
+                    </div>
+                `;
+            }
+            
+            this.updateStatus(`Failed to generate GIF: ${error.message}`, 'error');
         }
     }
     

@@ -127,6 +127,39 @@ class ReferenceRequest(BaseModel):
     url: str = Field(..., description="参考图像URL")
 
 
+class VideoRequest(BaseModel):
+    """图生视频请求"""
+    image_path: str = Field(..., description="输入图像路径")
+    num_frames: Optional[int] = Field(None, description="生成帧数，默认使用配置值")
+    generate_gif: bool = Field(True, description="是否同时生成GIF")
+
+
+class VideoResponse(BaseModel):
+    """图生视频响应"""
+    mp4_path: str = Field(..., description="MP4文件路径")
+    mp4_url: str = Field(..., description="MP4访问URL")
+    video_filename: str = Field(..., description="视频文件名")
+    video_size_mb: float = Field(..., description="视频文件大小（MB）")
+    video_generation_seconds: float = Field(..., description="视频生成耗时（秒）")
+    num_frames: int = Field(..., description="生成的帧数")
+    fps: int = Field(..., description="帧率")
+    gif_path: Optional[str] = Field(None, description="GIF文件路径")
+    gif_url: Optional[str] = Field(None, description="GIF访问URL")
+    gif_filename: Optional[str] = Field(None, description="GIF文件名")
+    gif_size_mb: Optional[float] = Field(None, description="GIF文件大小（MB）")
+    gif_conversion_seconds: Optional[float] = Field(None, description="GIF转换耗时（秒）")
+    total_seconds: float = Field(..., description="总耗时（秒）")
+
+
+class VideoEstimateResponse(BaseModel):
+    """视频生成时间预估响应"""
+    estimated_seconds: float = Field(..., description="预估总时间（秒）")
+    estimated_minutes: float = Field(..., description="预估总时间（分钟）")
+    video_generation_seconds: float = Field(..., description="视频生成预估时间（秒）")
+    gif_conversion_seconds: float = Field(..., description="GIF转换预估时间（秒）")
+    num_frames: int = Field(..., description="帧数")
+
+
 class HealthResponse(BaseModel):
     """健康检查响应"""
     status: str = Field(..., description="状态")

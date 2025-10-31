@@ -11,6 +11,7 @@ from app.api.routes_health import router as health_router
 from app.api.routes_image import router as image_router
 from app.api.routes_static import router as static_router, setup_static_files
 from app.api.routes_tasks import router as tasks_router
+from app.api.routes_video import router as video_router
 from app.config import config
 from app.data.dal import get_db
 
@@ -64,14 +65,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 注册路由
+# 注册路由（必须在挂载静态文件之前注册，确保路由优先级）
 app.include_router(style_router)
 app.include_router(health_router)
 app.include_router(image_router)
-app.include_router(static_router)
+app.include_router(static_router)  # 静态文件路由必须在挂载之前注册
 app.include_router(tasks_router)
+app.include_router(video_router)
 
-# 设置静态文件服务
+# 设置静态文件服务（挂载必须在路由之后，避免覆盖路由）
 setup_static_files(app)
 
 

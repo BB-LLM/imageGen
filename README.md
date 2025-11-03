@@ -48,10 +48,12 @@ soul/
 
 ## 🛠️ Installation
 
+### 0. python == 3.10, cuda == 12.8
+
 ### 1. Clone the Repository
 
 ```bash
-git clone <your-gitlab-url>
+git clone https://gitlab.com/genimage/soul-mvp.git
 cd soul
 ```
 
@@ -59,13 +61,13 @@ cd soul
 
 ```bash
 # Create virtual environment
-python -m venv venv
+python3.10 -m venv soul
 
 # Activate (Windows)
-venv\Scripts\activate
+soul\Scripts\activate
 
 # Activate (Linux/Mac)
-source venv/bin/activate
+source soul/bin/activate
 ```
 
 ### 3. Install Dependencies

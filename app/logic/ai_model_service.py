@@ -5,6 +5,7 @@ import os
 import asyncio
 import random
 import hashlib
+import gc
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 import torch
@@ -256,6 +257,14 @@ class AIModelService:
         
         # 获取文件信息
         file_size = os.path.getsize(filepath)
+        
+        # 图片生成完成后清理GPU显存中的临时张量
+        # 这样可以释放显存给后续的视频生成任务使用
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            gc.collect()
+            # 再次清理以确保释放
+            torch.cuda.empty_cache()
         
         return {
             "filepath": filepath,

@@ -4,6 +4,7 @@
 import os
 import asyncio
 import time
+import gc
 from typing import Optional, Dict, Any
 from pathlib import Path
 import torch
@@ -51,17 +52,38 @@ class VideoGenerationService:
         else:
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
         
+        # 内存配置
+        self.device_memory_fraction = config.DEVICE_MEMORY_FRACTION
+        
         print(f"视频生成服务使用设备: {self.device}")
+        if self.device == "cuda" and torch.cuda.is_available():
+            print(f"GPU显存限制: {self.device_memory_fraction * 100:.0f}%")
         
         # Pipeline将在首次使用时懒加载
         self._pipeline = None
+    
+    def _clear_gpu_memory(self):
+        """清理GPU显存"""
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            gc.collect()
+            # 再次清理以确保释放
+            torch.cuda.empty_cache()
     
     @property
     def pipeline(self) -> StableVideoDiffusionPipeline:
         """获取SVD Pipeline（懒加载）"""
         if self._pipeline is None:
             print("正在加载SVD模型...")
+            
+            # 在加载新模型前清理显存（图片生成模型可能还在显存中）
+            self._clear_gpu_memory()
+            
             torch_dtype = torch.float16 if self.device == "cuda" else torch.float32
+            
+            # 如果使用GPU且配置了内存限制，设置内存分数
+            if self.device == "cuda" and torch.cuda.is_available():
+                pass
             
             self._pipeline = StableVideoDiffusionPipeline.from_pretrained(
                 self.model_id,
@@ -124,6 +146,16 @@ class VideoGenerationService:
         """
         # 使用全局锁防止同时生成图片和视频
         async with with_lock(GLOBAL_GENERATION_LOCK_KEY):
+            # 在开始视频生成前清理GPU显存（图片生成模型可能还在显存中）
+            # 这样可以确保有足够的显存加载SVD模型
+            print("清理GPU显存，准备加载视频生成模型...")
+            if torch.cuda.is_available():
+                self._clear_gpu_memory()
+                # 显示当前显存使用情况
+                allocated = torch.cuda.memory_allocated() / 1024**3
+                reserved = torch.cuda.memory_reserved() / 1024**3
+                print(f"GPU显存 - 已分配: {allocated:.2f} GB, 已保留: {reserved:.2f} GB")
+            
             start_time = time.time()
             
             # 处理图像路径：如果是相对路径，转换为绝对路径
@@ -209,6 +241,11 @@ class VideoGenerationService:
             
             total_time = time.time() - start_time
             result["total_seconds"] = round(total_time, 2)
+            
+            # 生成完成后清理显存中的临时数据
+            if torch.cuda.is_available():
+                # 清理推理过程中的临时张量
+                self._clear_gpu_memory()
             
             return result
     

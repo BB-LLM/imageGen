@@ -1,6 +1,6 @@
 fastapi==0.119.0
-torch==2.9.0+cu128
-torchvision==0.24.0+cu128
+torch
+torchvision
 uvicorn[standard]==0.37.0
 psycopg2-binary==2.9.11
 sqlalchemy==2.0.44

@@ -10,6 +10,7 @@ from http import HTTPStatus
 from dashscope import VideoSynthesis
 import dashscope
 import requests
+from requests.exceptions import ConnectionError as RequestsConnectionError, Timeout, RequestException
 import imageio
 
 from ..config import config
@@ -19,7 +20,7 @@ from ..data.dal import (
     SoulStyleProfileDAL, VariantDAL, UserSeenDAL,
     PromptKeyDAL, WorkLockDAL, LandmarkLogDAL
 )
-from ..data.models import VariantBase
+from ..data.models import VariantBase, LandmarkLogBase
 from .prompt_cache import PromptCache, PromptBuilder
 from .place_chooser import PlaceChooser
 
@@ -108,9 +109,106 @@ class WanVideoGenerationService:
         task_id = rsp.output.task_id
         print(f"任务ID: {task_id}")
         
-        # 等待任务完成
+        # 等待任务完成（使用手动轮询，添加重试机制和错误处理）
         print("等待视频生成完成...")
-        rsp = VideoSynthesis.wait(rsp)
+        max_retries = 5  # 增加重试次数
+        retry_count = 0
+        max_wait_time = 600  # 最大等待时间（秒）
+        start_wait_time = time.time()
+        last_status = None
+        
+        while True:
+            try:
+                # 检查是否超时
+                elapsed_time = time.time() - start_wait_time
+                if elapsed_time > max_wait_time:
+                    raise RuntimeError(f"视频生成超时（超过 {max_wait_time} 秒），任务ID: {task_id}")
+                
+                # 使用 fetch 查询任务状态（传入 api_key）
+                try:
+                    status_rsp = VideoSynthesis.fetch(rsp, api_key=self.api_key)
+                except Exception as fetch_error:
+                    # fetch 调用本身失败，可能是网络问题
+                    if retry_count < max_retries:
+                        retry_count += 1
+                        wait_time = min(10 * retry_count, 30)
+                        print(f"查询任务状态时发生错误: {type(fetch_error).__name__}: {str(fetch_error)}")
+                        print(f"{wait_time}秒后重试 {retry_count}/{max_retries}...")
+                        await asyncio.sleep(wait_time)
+                        continue
+                    else:
+                        raise RuntimeError(f"查询任务状态失败，已重试 {max_retries} 次: {type(fetch_error).__name__}: {str(fetch_error)}")
+                
+                if status_rsp.status_code != HTTPStatus.OK:
+                    if retry_count < max_retries:
+                        retry_count += 1
+                        print(f"查询任务状态失败，重试 {retry_count}/{max_retries}...")
+                        await asyncio.sleep(5)  # 等待5秒后重试
+                        continue
+                    else:
+                        raise RuntimeError(
+                            f'查询任务状态失败: status_code={status_rsp.status_code}, '
+                            f'code={status_rsp.code}, message={status_rsp.message}'
+                        )
+                
+                task_status = status_rsp.output.task_status
+                last_status = task_status
+                print(f"任务状态: {task_status} (已等待 {elapsed_time:.1f} 秒)")
+                
+                if task_status == "SUCCEEDED":
+                    rsp = status_rsp
+                    print(f"视频生成成功！总耗时: {elapsed_time:.1f} 秒")
+                    break
+                elif task_status == "FAILED":
+                    error_msg = "未知错误"
+                    if hasattr(status_rsp.output, 'message') and status_rsp.output.message:
+                        error_msg = status_rsp.output.message
+                    elif hasattr(status_rsp, 'message') and status_rsp.message:
+                        error_msg = status_rsp.message
+                    raise RuntimeError(f"视频生成失败: {error_msg}")
+                elif task_status in ["PENDING", "RUNNING"]:
+                    # 任务还在进行中，等待后继续查询
+                    retry_count = 0  # 重置重试计数（任务正常进行中）
+                    await asyncio.sleep(10)  # 等待10秒后再次查询
+                else:
+                    # 未知状态，等待后重试
+                    print(f"警告: 未知任务状态 '{task_status}'")
+                    await asyncio.sleep(5)
+                    retry_count += 1
+                    if retry_count >= max_retries:
+                        raise RuntimeError(f"任务状态异常: {task_status}，已重试 {max_retries} 次")
+                    
+            except (ConnectionResetError, ConnectionError, RequestsConnectionError, Timeout, RequestException) as e:
+                elapsed_time = time.time() - start_wait_time
+                if retry_count < max_retries:
+                    retry_count += 1
+                    wait_time = min(10 * retry_count, 30)  # 递增等待时间，最多30秒
+                    print(f"网络连接错误 ({elapsed_time:.1f}秒)，{wait_time}秒后重试 {retry_count}/{max_retries}...")
+                    print(f"错误详情: {type(e).__name__}: {str(e)}")
+                    await asyncio.sleep(wait_time)
+                    # 继续使用现有的 rsp 对象，确保 task_id 存在
+                    if not hasattr(rsp, 'output') or not hasattr(rsp.output, 'task_id'):
+                        # 如果 rsp 对象损坏，需要重新构建
+                        class TaskOutput:
+                            def __init__(self, task_id):
+                                self.task_id = task_id
+                        class TaskResponse:
+                            def __init__(self, task_id):
+                                self.output = TaskOutput(task_id)
+                        rsp = TaskResponse(task_id)
+                else:
+                    raise RuntimeError(f"网络连接失败，已重试 {max_retries} 次 (总耗时 {elapsed_time:.1f}秒): {type(e).__name__}: {str(e)}")
+            except Exception as e:
+                # 其他未知错误
+                elapsed_time = time.time() - start_wait_time
+                print(f"未知错误 ({elapsed_time:.1f}秒): {type(e).__name__}: {str(e)}")
+                if retry_count < max_retries:
+                    retry_count += 1
+                    wait_time = min(10 * retry_count, 30)
+                    print(f"{wait_time}秒后重试 {retry_count}/{max_retries}...")
+                    await asyncio.sleep(wait_time)
+                else:
+                    raise RuntimeError(f"视频生成过程中发生错误 (总耗时 {elapsed_time:.1f}秒): {type(e).__name__}: {str(e)}")
         
         if rsp.status_code != HTTPStatus.OK:
             raise RuntimeError(
@@ -462,7 +560,14 @@ class WanVideoGenerationService:
         VariantDAL.create(db, variant_data)
         
         # 8. 记录地标使用日志
-        LandmarkLogDAL.log_usage(db, soul_id, city_key, landmark_key, user_id)
+        log_data = LandmarkLogBase(
+            soul_id=soul_id,
+            city_key=city_key,
+            landmark_key=landmark_key,
+            user_id=user_id or "",
+            used_at_ts=now_ms()
+        )
+        LandmarkLogDAL.log_usage(db, log_data)
         
         # 9. 标记为已看
         UserSeenDAL.mark_seen(db, user_id, variant_id)

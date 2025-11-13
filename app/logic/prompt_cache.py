@@ -258,6 +258,57 @@ class PromptBuilder:
             else:
                 style_tags.append('static style')
         
+        # 从 extra_json 中提取信息并添加到 prompt
+        if style_profile.extra_json:
+            extra = style_profile.extra_json
+            
+            # 添加性别信息
+            if 'gender' in extra:
+                gender = extra['gender']
+                if gender == 'male':
+                    style_tags.append('male character')
+                elif gender == 'female':
+                    style_tags.append('female character')
+            
+            # 添加年龄信息
+            if 'age' in extra:
+                age = extra['age']
+                if age < 20:
+                    style_tags.append('teenager')
+                elif age < 30:
+                    style_tags.append('young adult')
+                elif age < 40:
+                    style_tags.append('adult')
+                else:
+                    style_tags.append('mature adult')
+            
+            # 添加风格关键词
+            if 'style_keywords' in extra and isinstance(extra['style_keywords'], list):
+                style_tags.extend(extra['style_keywords'])
+            
+            # 添加服装风格描述
+            if 'clothing_style' in extra and isinstance(extra['clothing_style'], dict):
+                clothing_parts = []
+                for key, value in extra['clothing_style'].items():
+                    if isinstance(value, str):
+                        clothing_parts.append(value)
+                    elif isinstance(value, list):
+                        clothing_parts.extend(value)
+                if clothing_parts:
+                    style_tags.extend(clothing_parts)
+            
+            # 添加发型
+            if 'hair_style' in extra:
+                style_tags.append(extra['hair_style'])
+            
+            # 添加整体主题（如果有）
+            if 'overall_theme' in extra:
+                theme = extra['overall_theme']
+                if isinstance(theme, str):
+                    # 将主题字符串按逗号分割并添加
+                    theme_parts = [t.strip() for t in theme.split(',')]
+                    style_tags.extend(theme_parts)
+        
         positive_parts.extend(style_tags)
         
         # 添加额外标签

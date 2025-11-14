@@ -19,43 +19,66 @@ class SoulApp {
     }
     
     bindEvents() {
-        // Soul选择事件
-        document.querySelectorAll('.soul-card').forEach(card => {
-            card.addEventListener('click', (e) => {
-                this.selectSoul(e.currentTarget.dataset.soul);
+        // Soul选择事件 - 使用事件委托，确保动态添加的元素也能响应
+        const soulCardsContainer = document.querySelector('.soul-cards');
+        if (soulCardsContainer) {
+            soulCardsContainer.addEventListener('click', (e) => {
+                const soulCard = e.target.closest('.soul-card');
+                if (soulCard && soulCard.dataset.soul) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.selectSoul(soulCard.dataset.soul);
+                }
             });
-        });
+        }
         
         // 功能切换事件
         document.querySelectorAll('.tab-button').forEach(button => {
             button.addEventListener('click', (e) => {
+                e.preventDefault();
                 this.switchTab(e.currentTarget.dataset.tab);
             });
         });
         
         // 表单提交事件
-        document.getElementById('style-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.generateStyleImage();
-        });
+        const styleForm = document.getElementById('style-form');
+        if (styleForm) {
+            styleForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.generateStyleImage();
+            });
+        }
         
-        document.getElementById('selfie-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.generateSelfie();
-        });
+        const selfieForm = document.getElementById('selfie-form');
+        if (selfieForm) {
+            selfieForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.generateSelfie();
+            });
+        }
     }
     
     selectSoul(soulId) {
+        if (!soulId) {
+            console.error('selectSoul: soulId is required');
+            return;
+        }
+        
         // 移除之前的选中状态
         document.querySelectorAll('.soul-card').forEach(card => {
             card.classList.remove('selected');
         });
         
         // 添加选中状态
-        document.querySelector(`[data-soul="${soulId}"]`).classList.add('selected');
-        
-        this.selectedSoul = soulId;
-        this.updateStatus(`Selected Soul: ${soulId}`, 'info');
+        const selectedCard = document.querySelector(`[data-soul="${soulId}"]`);
+        if (selectedCard) {
+            selectedCard.classList.add('selected');
+            this.selectedSoul = soulId;
+            this.updateStatus(`Selected Soul: ${soulId}`, 'info');
+        } else {
+            console.error(`selectSoul: Could not find soul card with data-soul="${soulId}"`);
+            this.updateStatus(`Error: Soul "${soulId}" not found`, 'error');
+        }
     }
     
     switchTab(tabId) {
@@ -237,14 +260,7 @@ class SoulApp {
         
         resultHtml += `
                     <p><strong>Cache Hit:</strong> ${result.cache_hit ? 'Yes' : 'No'}</p>
-                    <div class="result-actions">
-                        <button class="btn-convert-gif" id="convert-gif-btn-${result.variant_id}" 
-                                onclick="app.convertToGif('${result.variant_id}', '${result.url}')">
-                            <i class="fas fa-video"></i> Transform to GIF
-                        </button>
-                        <div id="gif-estimate-${result.variant_id}" class="gif-estimate" style="display: none;"></div>
-                    </div>
-                    <div id="gif-result-${result.variant_id}" class="gif-result" style="display: none;"></div>
+                    <!-- 图像转GIF功能已移除 -->
                 </div>
             </div>
         `;
@@ -287,6 +303,8 @@ class SoulApp {
         }
     }
     
+    // 图像转GIF功能已移除
+    /*
     async convertToGif(variantId, imageUrl) {
         try {
             // 禁用按钮并显示加载状态
@@ -454,6 +472,7 @@ class SoulApp {
             this.updateStatus(`Failed to generate GIF: ${error.message}`, 'error');
         }
     }
+    */
     
     updateTasksDisplay() {
         const container = document.getElementById('result-container');

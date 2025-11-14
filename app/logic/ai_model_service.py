@@ -1,21 +1,23 @@
 """
 AI模型服务 - 集成本地文生图pipeline
+【已废弃】本地模型代码已注释，现使用Wan API进行图像生成
+请使用 app.logic.service_wan_image.WanImageGenerationService
 """
-import os
-import asyncio
-import random
-import hashlib
-import gc
-from typing import Dict, Any, Optional, List
-from pathlib import Path
-import torch
-from diffusers import StableDiffusionXLPipeline
-from PIL import Image
-import numpy as np
+# import os
+# import asyncio
+# import random
+# import hashlib
+# import gc
+# from typing import Dict, Any, Optional, List
+# from pathlib import Path
+# import torch
+# from diffusers import StableDiffusionXLPipeline
+# from PIL import Image
+# import numpy as np
 
-from ..core.lww import now_ms
-from ..core.ids import generate_ulid
-from ..config import config
+# from ..core.lww import now_ms
+# from ..core.ids import generate_ulid
+# from ..config import config
 
 
 class AIModelService:

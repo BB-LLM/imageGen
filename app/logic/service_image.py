@@ -21,7 +21,9 @@ GLOBAL_GENERATION_LOCK_KEY = "global:generation"
 from ..core.task_manager import TaskManager, TaskType, BackgroundTask
 from .prompt_cache import PromptCache, PromptBuilder
 from .place_chooser import PlaceChooser
-from .ai_model_service import generate_soul_image, generate_soul_gif
+# 注释掉本地模型服务，改用Wan API
+# from .ai_model_service import generate_soul_image, generate_soul_gif
+from .service_wan_image import get_wan_image_service
 
 
 class ImageGenerationService:
@@ -127,20 +129,22 @@ class ImageGenerationService:
         variant_id = generate_ulid()
         seed = random.randint(1000, 999999)
         
-        # 4. 使用真实AI模型生成图像
-        ai_result = await generate_soul_image(
-            soul_id=soul_id,
+        # 4. 使用Wan API生成图像（替代本地模型）
+        # 【已废弃】原代码使用本地模型 generate_soul_image
+        wan_service = get_wan_image_service()
+        ai_result = await wan_service.generate_image_from_text(
             positive_prompt=positive_prompt,
             negative_prompt=negative_prompt,
-            variant_id=variant_id,
-            seed=seed
+            output_filename=f"{soul_id}_{variant_id}",
+            seed=seed,
+            n=1
         )
         
         # 5. 生成本地文件路径（后续可改为GCS）
-        local_filepath = ai_result["filepath"]
+        local_filepath = ai_result["image_paths"][0]  # 使用第一张图像
         filename = os.path.basename(local_filepath)
         storage_key = f"soul/{soul_id}/key/{similar_pk.pk_id if similar_pk else 'new'}/variant/{variant_id}.png"
-        asset_url = f"/generated/{filename}"  # 生成图像URL
+        asset_url = ai_result["image_url"]  # 使用Wan API返回的URL
         
         # 6. 创建或更新提示词键
         if not similar_pk:
@@ -152,6 +156,10 @@ class ImageGenerationService:
             pk_id = similar_pk.pk_id
         
         # 7. 创建变体记录
+        # 获取图像文件大小
+        from pathlib import Path
+        image_size = Path(local_filepath).stat().st_size if os.path.exists(local_filepath) else 0
+        
         variant_data = VariantBase(
             variant_id=variant_id,
             pk_id=pk_id,
@@ -159,12 +167,11 @@ class ImageGenerationService:
             asset_url=asset_url,
             storage_key=storage_key,
             seed=seed,
-            phash=ai_result["phash"],
+            phash=None,  # Wan API不返回phash，设为None
             meta_json={
-                "width": ai_result["width"],
-                "height": ai_result["height"],
-                "file_size": ai_result["file_size"],
-                "generation_time_ms": ai_result.get("generation_time_ms", 0),
+                "type": "wan_image",
+                "file_size": image_size,
+                "generation_time_seconds": ai_result.get("image_generation_seconds", 0),
                 "positive_prompt": positive_prompt,
                 "negative_prompt": negative_prompt,
                 "local_filepath": local_filepath
@@ -216,13 +223,15 @@ class ImageGenerationService:
         variant_id = generate_ulid()
         seed = random.randint(1000, 999999)
         
-        # 4. 使用真实AI模型生成自拍图像
-        ai_result = await generate_soul_image(
-            soul_id=soul_id,
+        # 4. 使用Wan API生成自拍图像（替代本地模型）
+        # 【已废弃】原代码使用本地模型 generate_soul_image
+        wan_service = get_wan_image_service()
+        ai_result = await wan_service.generate_image_from_text(
             positive_prompt=positive_prompt,
             negative_prompt=negative_prompt,
-            variant_id=variant_id,
-            seed=seed
+            output_filename=f"{soul_id}_selfie_{variant_id}",
+            seed=seed,
+            n=1
         )
         
         # 5. 生成缓存键
@@ -238,12 +247,16 @@ class ImageGenerationService:
         )
         
         # 6. 生成本地文件路径（后续可改为GCS）
-        local_filepath = ai_result["filepath"]
+        local_filepath = ai_result["image_paths"][0]  # 使用第一张图像
         filename = os.path.basename(local_filepath)
         storage_key = f"soul/{soul_id}/selfie/{city_key}/{landmark_key}/{variant_id}.png"
-        asset_url = f"/generated/{filename}"  # 生成图像URL
+        asset_url = ai_result["image_url"]  # 使用Wan API返回的URL
         
         # 7. 创建变体记录
+        # 获取图像文件大小
+        from pathlib import Path
+        image_size = Path(local_filepath).stat().st_size if os.path.exists(local_filepath) else 0
+        
         variant_data = VariantBase(
             variant_id=variant_id,
             pk_id=pk_data.pk_id,
@@ -251,13 +264,13 @@ class ImageGenerationService:
             asset_url=asset_url,
             storage_key=storage_key,
             seed=seed,
-            phash=ai_result["phash"],
+            phash=None,  # Wan API不返回phash，设为None
             meta_json={
-                "width": ai_result["width"],
-                "height": ai_result["height"],
-                "file_size": ai_result["file_size"],
-                "generation_time_ms": ai_result.get("generation_time_ms", 0),
+                "type": "wan_image_selfie",
+                "file_size": image_size,
+                "generation_time_seconds": ai_result.get("image_generation_seconds", 0),
                 "selfie_type": True,
+                "task_id": ai_result.get("task_id", ""),
                 "city": city_key,
                 "landmark": landmark_key,
                 "mood": mood,
@@ -498,14 +511,15 @@ class ImageGenerationService:
             if task.cancelled:
                 raise asyncio.CancelledError()
             
-            # 4. 使用真实AI模型生成自拍图像
+            # 4. 使用Wan API生成自拍图像（替代本地模型）
             task.progress = 50
-            ai_result = await generate_soul_image(
-                soul_id=soul_id,
+            wan_service = get_wan_image_service()
+            ai_result = await wan_service.generate_image_from_text(
                 positive_prompt=positive_prompt,
                 negative_prompt=negative_prompt,
-                variant_id=variant_id,
-                seed=seed
+                output_filename=f"{soul_id}_selfie_{variant_id}",
+                seed=seed,
+                n=1
             )
             
             await asyncio.sleep(0.1)
@@ -531,13 +545,17 @@ class ImageGenerationService:
             
             # 6. 生成本地文件路径（后续可改为GCS）
             task.progress = 80
-            local_filepath = ai_result["filepath"]
+            local_filepath = ai_result["image_paths"][0]  # 使用第一张图像
             filename = os.path.basename(local_filepath)
             storage_key = f"soul/{soul_id}/selfie/{city_key}/{landmark_key}/{variant_id}.png"
-            asset_url = f"/generated/{filename}"  # 生成图像URL
+            asset_url = ai_result["image_url"]  # 使用Wan API返回的URL
             
             # 7. 创建变体记录
             task.progress = 90
+            # 获取图像文件大小
+            from pathlib import Path
+            image_size = Path(local_filepath).stat().st_size if os.path.exists(local_filepath) else 0
+            
             variant_data = VariantBase(
                 variant_id=variant_id,
                 pk_id=pk_data.pk_id,
@@ -545,19 +563,19 @@ class ImageGenerationService:
                 asset_url=asset_url,
                 storage_key=storage_key,
                 seed=seed,
-                phash=ai_result["phash"],
+                phash=None,  # Wan API不返回phash，设为None
                 meta_json={
-                    "width": ai_result["width"],
-                    "height": ai_result["height"],
-                    "file_size": ai_result["file_size"],
-                    "generation_time_ms": ai_result.get("generation_time_ms", 0),
+                    "type": "wan_image_selfie",
+                    "file_size": image_size,
+                    "generation_time_seconds": ai_result.get("image_generation_seconds", 0),
                     "selfie_type": True,
                     "city": city_key,
                     "landmark": landmark_key,
                     "mood": mood,
                     "positive_prompt": positive_prompt,
                     "negative_prompt": negative_prompt,
-                    "local_filepath": local_filepath
+                    "local_filepath": local_filepath,
+                    "task_id": ai_result.get("task_id", "")
                 },
                 updated_at_ts=now_ms()
             )
@@ -618,25 +636,26 @@ class ImageGenerationService:
             if task.cancelled:
                 raise asyncio.CancelledError()
             
-            # 4. 使用真实AI模型生成图像
+            # 4. 使用Wan API生成图像（替代本地模型）
             task.progress = 80
             
-            # 在调用AI模型之前再次检查取消状态
+            # 在调用API之前再次检查取消状态
             if task.cancelled:
                 raise asyncio.CancelledError()
             
             try:
-                ai_result = await generate_soul_image(
-                    soul_id=soul_id,
+                # 使用Wan API生成图像
+                wan_service = get_wan_image_service()
+                ai_result = await wan_service.generate_image_from_text(
                     positive_prompt=positive_prompt,
                     negative_prompt=negative_prompt,
-                    variant_id=variant_id,
+                    output_filename=f"{soul_id}_{variant_id}",
                     seed=seed,
-                    cancellation_token=task.cancel_event
+                    n=1
                 )
             except asyncio.CancelledError:
-                # AI模型生成被取消
-                print(f"AI模型生成被取消: {task.task_id}")
+                # 图像生成被取消
+                print(f"图像生成被取消: {task.task_id}")
                 raise
             
             await asyncio.sleep(0.1)
@@ -645,10 +664,10 @@ class ImageGenerationService:
             
             # 5. 生成本地文件路径（后续可改为GCS）
             task.progress = 85
-            local_filepath = ai_result["filepath"]
+            local_filepath = ai_result["image_paths"][0]  # 使用第一张图像
             filename = os.path.basename(local_filepath)
             storage_key = f"soul/{soul_id}/key/{similar_pk.pk_id if similar_pk else 'new'}/variant/{variant_id}.png"
-            asset_url = f"/generated/{filename}"  # 生成图像URL
+            asset_url = ai_result["image_url"]  # 使用Wan API返回的URL
             
             # 6. 创建或更新提示词键
             task.progress = 90
@@ -662,6 +681,10 @@ class ImageGenerationService:
             
             # 7. 创建变体记录
             task.progress = 95
+            # 获取图像文件大小
+            from pathlib import Path
+            image_size = Path(local_filepath).stat().st_size if os.path.exists(local_filepath) else 0
+            
             variant_data = VariantBase(
                 variant_id=variant_id,
                 pk_id=pk_id,
@@ -669,15 +692,15 @@ class ImageGenerationService:
                 asset_url=asset_url,
                 storage_key=storage_key,
                 seed=seed,
-                phash=ai_result["phash"],
+                phash=None,  # Wan API不返回phash，设为None
                 meta_json={
-                    "width": ai_result["width"],
-                    "height": ai_result["height"],
-                    "file_size": ai_result["file_size"],
-                    "generation_time_ms": ai_result.get("generation_time_ms", 0),
+                    "type": "wan_image",
+                    "file_size": image_size,
+                    "generation_time_seconds": ai_result.get("image_generation_seconds", 0),
                     "positive_prompt": positive_prompt,
                     "negative_prompt": negative_prompt,
-                    "local_filepath": local_filepath
+                    "local_filepath": local_filepath,
+                    "task_id": ai_result.get("task_id", "")
                 },
                 updated_at_ts=now_ms()
             )

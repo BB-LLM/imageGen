@@ -71,6 +71,11 @@ class Config:
     WAN_PROMPT_EXTEND: bool = os.getenv("WAN_PROMPT_EXTEND", "True").lower() == "true"
     WAN_WATERMARK: bool = os.getenv("WAN_WATERMARK", "False").lower() == "true"
     
+    # Wan 文本到图像配置（阿里云 DashScope）
+    WAN_IMAGE_MODEL: str = os.getenv("WAN_IMAGE_MODEL", "wan2.5-t2i-preview")
+    WAN_IMAGE_SIZE: str = os.getenv("WAN_IMAGE_SIZE", "1024*1024")
+    WAN_IMAGE_OUTPUT_DIR: str = os.getenv("WAN_IMAGE_OUTPUT_DIR", "generated_images")
+    
     # 设备配置
     FORCE_CPU: bool = os.getenv("FORCE_CPU", "False").lower() == "true"
     DEVICE_MEMORY_FRACTION: float = float(os.getenv("DEVICE_MEMORY_FRACTION", "0.8"))

@@ -1,13 +1,12 @@
 # Soul - AI Character Image & Video Generation System
 
-FastAPI-based AI image and video generation system with intelligent deduplication, user-specific variant delivery, image-to-GIF conversion, and text-to-video generation capabilities.
+FastAPI-based AI image and video generation system with intelligent deduplication, user-specific variant delivery, and text-to-video generation capabilities.
 
 ## ✨ Features
 
-- **Image Generation**: Generate styled images using Stable Diffusion XL with Soul-specific styles
+- **Image Generation**: Generate styled images using Wan API (阿里云 DashScope) with Soul-specific styles
 - **Text-to-Video**: Direct text-to-video generation using Wan API (阿里云 DashScope)
-- **Image-to-Video**: Convert images to videos using Stable Video Diffusion (SVD)
-- **GIF Conversion**: Automatic MP4 to GIF conversion
+- **Automatic GIF Conversion**: Automatic MP4 to GIF conversion for videos
 - **Intelligent Caching**: Prompt similarity matching and user-specific variant delivery
 - **Selfie Generation**: Generate location-based selfies with diverse landmarks
 
@@ -17,8 +16,8 @@ FastAPI-based AI image and video generation system with intelligent deduplicatio
 soul/
 ├── app/
 │   ├── api/              # API routes
-│   │   ├── routes_image.py      # Image generation endpoints
-│   │   ├── routes_video.py      # Image-to-video generation endpoints (SVD)
+│   │   ├── routes_image.py      # Image generation endpoints (Wan API)
+│   │   ├── routes_video.py      # Image-to-video generation endpoints (SVD, deprecated)
 │   │   ├── routes_wan_video.py  # Text-to-video generation endpoints (Wan API)
 │   │   ├── routes_tasks.py      # Task management endpoints
 │   │   ├── routes_style.py      # Style-specific endpoints
@@ -33,15 +32,15 @@ soul/
 │   │   ├── models.py            # Pydantic schemas
 │   │   └── dal.py               # Data access layer
 │   ├── logic/
-│   │   ├── service_image.py     # Core image service
-│   │   ├── service_video.py     # Image-to-video generation service (SVD)
+│   │   ├── service_image.py     # Core image service (Wan API)
+│   │   ├── service_wan_image.py # Text-to-image generation service (Wan API)
 │   │   ├── service_wan_video.py # Text-to-video generation service (Wan API)
+│   │   ├── service_video.py     # Image-to-video generation service (SVD, deprecated)
 │   │   ├── prompt_cache.py      # Prompt normalization and caching
 │   │   ├── place_chooser.py     # Selfie location selection
-│   │   └── ai_model_service.py  # AI model wrapper
-│   ├── model/                   # AI models directory
-│   │   ├── sdXL_v10VAEFix.safetensors  # SDXL model
-│   │   └── test_svd.py          # SVD testing script
+│   │   └── ai_model_service.py  # AI model wrapper (deprecated, using Wan API)
+│   ├── model/                   # AI models directory (deprecated)
+│   │   └── test_wan_image.py    # Wan image API testing script
 │   ├── config.py                # Configuration management
 │   └── test/                    # Test suite
 ├── static/                      # Frontend files
@@ -61,7 +60,11 @@ soul/
 
 ## 🛠️ Installation
 
-### 0. python == 3.10, cuda == 12.8
+### 0. Requirements
+
+- Python 3.10+
+- PostgreSQL database
+- Wan API key (DASHSCOPE_API_KEY) from 阿里云百炼
 
 ### 1. Clone the Repository
 
@@ -89,10 +92,9 @@ source soul/bin/activate
 pip install -r requirements.txt
 ```
 
-**Note**: If you need GPU support, install the CUDA-enabled version of PyTorch:
-```bash
-pip install torch==2.9.0+cu128 torchvision==0.24.0+cu128 --index-url https://download.pytorch.org/whl/cu128
-```
+**Note**: 
+- No GPU or PyTorch installation required (using Wan API instead of local models)
+- The system uses cloud-based AI models via Wan API
 
 ### 4. Set Up PostgreSQL Database
 
@@ -125,30 +127,20 @@ Create a `.env` file in the project root:
 # Database
 DATABASE_URL=postgresql://mvpdbuser:mvpdbpw@localhost:5432/mvpdb
 
-# Google Cloud Storage (Optional)
-GCS_BUCKET_NAME=artifacts-dev-soulmedia
-GCS_PROJECT_ID=your-project-id
-
-# GPU Settings (Optional)
-FORCE_CPU=false
-DEVICE_MEMORY_FRACTION=0.8
-
 # Task Queue Settings
 MAX_CONCURRENT_TASKS=1
 LOG_LEVEL=INFO
 
-# SVD (Stable Video Diffusion) Settings (Optional)
-SVD_MODEL_ID=stabilityai/stable-video-diffusion-img2vid-xt
-SVD_OUTPUT_DIR=generated_videos
-SVD_NUM_FRAMES=25
-SVD_FPS=7
-SVD_IMAGE_WIDTH=1024
-SVD_IMAGE_HEIGHT=576
-SVD_ESTIMATED_SECONDS_PER_FRAME=2.0
-
-# Wan API (Text-to-Video) Settings (Required for text-to-video)
+# Wan API Settings (Required for image and video generation)
 DASHSCOPE_API_KEY=your-dashscope-api-key
 WAN_API_BASE_URL=https://dashscope.aliyuncs.com/api/v1
+
+# Wan Text-to-Image Settings
+WAN_IMAGE_MODEL=wan2.5-t2i-preview
+WAN_IMAGE_SIZE=1024*1024
+WAN_IMAGE_OUTPUT_DIR=generated_images
+
+# Wan Text-to-Video Settings
 WAN_OUTPUT_DIR=generated_videos
 WAN_MODEL=wan2.5-t2v-preview
 WAN_SIZE=832*480
@@ -165,23 +157,17 @@ python init_db.py
 
 This will create all necessary tables in the database.
 
-### 7. Download AI Models
+### 7. Configure Wan API Key
 
-Place your AI models in `app/model/` directory:
+**Required**: You must set the `DASHSCOPE_API_KEY` environment variable to use image and video generation features.
 
-**Stable Diffusion XL Model (Required for image generation):**
-```bash
-# Example: Download from Civitai https://civitai.com/models/101055/sd-xl
-# Place sdXL_v10VAEFix.safetensors in app/model/
-```
-
-**Stable Video Diffusion Model (Optional, for GIF generation):**
-The SVD model will be automatically downloaded from Hugging Face when first used:
-- Model: `stabilityai/stable-video-diffusion-img2vid-xt`
+Get your API key from [阿里云百炼](https://help.aliyun.com/zh/model-studio/get-api-key)
 
 **Note**: 
-- If no SDXL model is provided, the system will run in simulation mode
-- SVD model will be downloaded automatically on first use
+- Image generation now uses Wan API (wan2.5-t2i-preview) instead of local models
+- Video generation uses Wan API (wan2.5-t2v-preview)
+- No local model files are required
+- Image-to-GIF conversion feature has been removed
 
 ## 🚀 Running the Server
 
@@ -230,19 +216,14 @@ python -m pytest app/test/ --cov=app
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DATABASE_URL` | `postgresql://mvpdbuser:mvpdbpw@localhost:5432/mvpdb` | Database connection string |
-| `FORCE_CPU` | `false` | Force CPU-only mode |
-| `DEVICE_MEMORY_FRACTION` | `0.8` | GPU memory fraction to use |
 | `MAX_CONCURRENT_TASKS` | `1` | Maximum concurrent generation tasks |
 | `LOG_LEVEL` | `INFO` | Logging level |
-| `SVD_MODEL_ID` | `stabilityai/stable-video-diffusion-img2vid-xt` | SVD model identifier |
-| `SVD_NUM_FRAMES` | `25` | Number of frames to generate |
-| `SVD_FPS` | `7` | Frame rate for video/GIF |
-| `SVD_IMAGE_WIDTH` | `1024` | Input image width |
-| `SVD_IMAGE_HEIGHT` | `576` | Input image height |
-| `SVD_ESTIMATED_SECONDS_PER_FRAME` | `2.0` | Estimated seconds per frame for time estimation |
-| `DASHSCOPE_API_KEY` | - | **Required** for Wan text-to-video. Get from [阿里云百炼](https://help.aliyun.com/zh/model-studio/get-api-key) |
+| `DASHSCOPE_API_KEY` | - | **Required** for image and video generation. Get from [阿里云百炼](https://help.aliyun.com/zh/model-studio/get-api-key) |
 | `WAN_API_BASE_URL` | `https://dashscope.aliyuncs.com/api/v1` | Wan API base URL (Beijing region) |
-| `WAN_MODEL` | `wan2.5-t2v-preview` | Wan model identifier |
+| `WAN_IMAGE_MODEL` | `wan2.5-t2i-preview` | Wan image model identifier |
+| `WAN_IMAGE_SIZE` | `1024*1024` | Image resolution |
+| `WAN_IMAGE_OUTPUT_DIR` | `generated_images` | Image output directory |
+| `WAN_MODEL` | `wan2.5-t2v-preview` | Wan video model identifier |
 | `WAN_SIZE` | `832*480` | Video resolution |
 | `WAN_DURATION` | `5` | Video duration in seconds |
 | `WAN_PROMPT_EXTEND` | `true` | Enable prompt extension |
@@ -260,15 +241,6 @@ python -m pytest app/test/ --cov=app
   - Query params: `variant_id`, `user_id`
 - `GET /image/variants/{pk_id}` - Get all variants by prompt key
 - `GET /image/user/{user_id}/seen` - Get user's seen variants
-
-### Video/GIF Generation (Image-to-Video, SVD)
-
-- `GET /video/estimate` - Estimate GIF generation time
-  - Query params: `num_frames` (optional)
-- `POST /video/generate` - Generate video and GIF from image
-  - Body: `{image_path, num_frames?, generate_gif?}`
-- `POST /video/generate-from-variant` - Generate GIF from variant ID
-  - Query params: `variant_id`, `num_frames?`, `generate_gif?`
 
 ### Text-to-Video Generation (Wan API)
 
@@ -314,47 +286,31 @@ python -m pytest app/test/ --cov=app
 ### Generate an Image
 
 **Via Web Interface:**
-1. Select a Soul character
-2. Enter a prompt (cue)
-3. Click "Generate"
-4. Click "Transform to GIF" button to convert to animated GIF
+1. Navigate to http://localhost:8000
+2. Select a Soul character
+3. Enter a prompt (cue)
+4. Click "Generate"
+5. The system will generate an image using Wan API
 
 **Via API:**
 ```bash
 # Generate image
 curl "http://localhost:8000/image?soul_id=nova&cue=penguin&user_id=user123"
-
-# Convert to GIF (after image generation)
-curl -X POST http://localhost:8000/video/generate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "image_path": "generated_images/nova_xxx.png",
-    "generate_gif": true
-  }'
-```
-
-### Estimate GIF Generation Time
-
-```bash
-curl http://localhost:8000/video/estimate?num_frames=25
 ```
 
 Response:
 ```json
 {
-  "estimated_seconds": 52.0,
-  "estimated_minutes": 0.9,
-  "video_generation_seconds": 50.0,
-  "gif_conversion_seconds": 2.0,
-  "num_frames": 25
+  "url": "/generated/nova_01K8XXX.png",
+  "variant_id": "01K8XXX",
+  "pk_id": "01K8YYY"
 }
 ```
 
-### Generate GIF from Variant ID
-
-```bash
-curl -X POST "http://localhost:8000/video/generate-from-variant?variant_id=01K8XXX&generate_gif=true"
-```
+**Note**: 
+- Images are generated using Wan API (wan2.5-t2i-preview)
+- No local model files are required
+- Image-to-GIF conversion feature has been removed
 
 ### Generate Video from Text (Wan API)
 
@@ -393,7 +349,9 @@ Response:
 ```
 
 **Note**: 
-- Wan API requires `DASHSCOPE_API_KEY` environment variable
+- Wan API requires `DASHSCOPE_API_KEY` environment variable (required for both image and video generation)
+- Images are automatically downloaded and saved to `generated_images/` directory
 - Videos are automatically downloaded and saved to `generated_videos/` directory
-- GIF conversion is automatic (no need to specify)
+- GIF conversion is automatic for videos (no need to specify)
 - The system supports unique variant delivery (same prompt returns different variants for different users)
+- Image-to-GIF conversion feature (using SVD) has been removed

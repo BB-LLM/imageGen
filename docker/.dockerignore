@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# 虚拟环境
+venv/
+env/
+ENV/
+soul/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 数据文件（通过volume挂载，不打包进镜像）
+generated_images/
+generated_videos/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mp4
+*.safetensors
+*.whl
+
+# 测试文件
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 日志
+*.log
+logs/
+
+# 环境变量
+.env
+.env.local
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# 文档
+*.md
+!README.md
+
+# Docker（避免递归复制）
+docker/
+
+# 其他
+.DS_Store
+Thumbs.db
+

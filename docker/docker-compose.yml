@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # PostgreSQL数据库
+  postgres:
+    image: postgres:15.14-alpine3.21
+    container_name: soul-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mvpdbuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mvpdbpw}
+      POSTGRES_DB: ${POSTGRES_DB:-mvpdb}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mvpdbuser}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - soul-network
+
+  # Soul应用
+  soul-app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: soul-app
+    environment:
+      # 数据库配置（使用Docker服务名）
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mvpdbuser}:${POSTGRES_PASSWORD:-mvpdbpw}@postgres:5432/${POSTGRES_DB:-mvpdb}
+      
+      # Wan API配置（必需）
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
+      WAN_API_BASE_URL: ${WAN_API_BASE_URL:-https://dashscope.aliyuncs.com/api/v1}
+      
+      # 应用配置
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      DEBUG: ${DEBUG:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      MAX_CONCURRENT_TASKS: ${MAX_CONCURRENT_TASKS:-1}
+      
+      # Wan图像配置
+      WAN_IMAGE_MODEL: ${WAN_IMAGE_MODEL:-wan2.5-t2i-preview}
+      WAN_IMAGE_SIZE: ${WAN_IMAGE_SIZE:-1024*1024}
+      WAN_IMAGE_OUTPUT_DIR: /app/generated_images
+      
+      # Wan视频配置
+      WAN_OUTPUT_DIR: /app/generated_videos
+      WAN_MODEL: ${WAN_MODEL:-wan2.5-t2v-preview}
+      WAN_SIZE: ${WAN_SIZE:-832*480}
+      WAN_DURATION: ${WAN_DURATION:-5}
+      WAN_PROMPT_EXTEND: ${WAN_PROMPT_EXTEND:-true}
+      WAN_WATERMARK: ${WAN_WATERMARK:-false}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      # 挂载生成的数据目录，确保数据持久化（相对于项目根目录）
+      - ../generated_images:/app/generated_images
+      - ../generated_videos:/app/generated_videos
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - soul-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  soul-network:
+    driver: bridge
+

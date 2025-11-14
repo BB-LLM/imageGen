@@ -35,7 +35,6 @@ soul/
 │   │   ├── service_image.py     # Core image service (Wan API)
 │   │   ├── service_wan_image.py # Text-to-image generation service (Wan API)
 │   │   ├── service_wan_video.py # Text-to-video generation service (Wan API)
-│   │   ├── service_video.py     # Image-to-video generation service (SVD, deprecated)
 │   │   ├── prompt_cache.py      # Prompt normalization and caching
 │   │   ├── place_chooser.py     # Selfie location selection
 │   │   └── ai_model_service.py  # AI model wrapper (deprecated, using Wan API)
@@ -100,6 +99,15 @@ pip install -r requirements.txt
 
 **Option A: Using Docker (Recommended)**
 
+所有 Docker 相关文件已移至 `docker/` 目录，请参考 `docker/DOCKER_DEPLOY.md` 获取详细部署说明。
+
+快速启动（包含数据库和应用）：
+```bash
+cd docker
+docker-compose up -d
+```
+
+或者仅启动数据库：
 ```bash
 docker run -d \
   --name soul-mvp \

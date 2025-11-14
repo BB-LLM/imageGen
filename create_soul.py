@@ -5,7 +5,18 @@ import sys
 import os
 from pathlib import Path
 
-project_root = Path(__file__).parent.parent.parent
+# 获取项目根目录（支持本地和Docker环境）
+# 在Docker中，文件在/app目录下
+current_dir = Path(__file__).parent
+if (current_dir / "app").exists():
+    # 如果在项目根目录下（本地开发）
+    project_root = current_dir
+elif (current_dir.parent / "app").exists():
+    # 如果在子目录下
+    project_root = current_dir.parent
+else:
+    # Docker环境，默认使用/app
+    project_root = Path("/app")
 sys.path.insert(0, str(project_root))
 
 from app.data.dal import get_db, SoulDAL, SoulStyleProfileDAL
@@ -225,19 +236,34 @@ def create_all_souls():
     db = next(get_db())
     
     try:
+        # 检查Soul是否已存在，避免重复创建
+        from app.data.dal import SoulDAL
+        
         # Create Li Zhe
-        create_lizhe_soul(db)
+        existing_lizhe = SoulDAL.get_by_id(db, "lizhe")
+        if not existing_lizhe:
+            create_lizhe_soul(db)
+        else:
+            print("\n=== Li Zhe Soul already exists, skipping ===")
         
         # Create Lin Na
-        create_linna_soul(db)
+        existing_linna = SoulDAL.get_by_id(db, "linna")
+        if not existing_linna:
+            create_linna_soul(db)
+        else:
+            print("\n=== Lin Na Soul already exists, skipping ===")
         
         # Create Wang Jing
-        create_wangjing_soul(db)
+        existing_wangjing = SoulDAL.get_by_id(db, "wangjing")
+        if not existing_wangjing:
+            create_wangjing_soul(db)
+        else:
+            print("\n=== Wang Jing Soul already exists, skipping ===")
         
         print("\n" + "=" * 50)
-        print("All Souls created successfully!")
+        print("All Souls check completed!")
         print("=" * 50)
-        print("\nCreated Souls list:")
+        print("\nSouls list:")
         print("1. Li Zhe (lizhe) - INTJ, 30-year-old Data Analyst")
         print("2. Lin Na (linna) - ESFP, 25-year-old Freelance Party Planner")
         print("3. Wang Jing (wangjing) - INFJ, 28-year-old Psychologist")
@@ -246,6 +272,7 @@ def create_all_souls():
         print(f"\n✗ Creation failed: {e}")
         import traceback
         traceback.print_exc()
+        raise  # 重新抛出异常，让调用者知道失败
     finally:
         db.close()
 

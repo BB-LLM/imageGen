@@ -1,6 +1,7 @@
 fastapi==0.119.0
-torch
-torchvision
+# torch和torchvision已移除（不再使用本地模型）
+# torch==2.9.0
+# torchvision==0.24.0
 uvicorn[standard]==0.37.0
 psycopg2-binary==2.9.11
 sqlalchemy==2.0.44
@@ -11,10 +12,14 @@ google-cloud-storage==2.10.0
 google-cloud-logging==3.8.0
 sentence-transformers==5.1.1
 numpy==2.2.6
-diffusers==0.35.2
-transformers==4.57.1
-opencv-python==4.12.0.88
-accelerate==1.11.0
+# diffusers已移除（不再使用本地模型）
+# diffusers==0.35.2
+# transformers已移除（不再使用本地模型）
+# transformers==4.57.1
+# opencv-python已移除（不再使用本地模型）
+# opencv-python==4.12.0.88
+# accelerate已移除（不再使用本地模型）
+# accelerate==1.11.0
 imageio==2.34.0
 imageio-ffmpeg==0.5.1
 ftfy==6.3.1

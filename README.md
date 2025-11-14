@@ -50,8 +50,14 @@ soul/
 │   └── style.css               # Shared styles
 ├── generated_images/            # Generated image files
 ├── generated_videos/            # Generated video and GIF files
+├── docker/                      # Docker deployment files
+│   ├── Dockerfile               # Docker image build file
+│   ├── docker-compose.yml       # Docker Compose configuration
+│   ├── docker-entrypoint.sh     # Container startup script
+│   └── DOCKER_DEPLOY.md         # Docker deployment guide
 ├── main.py                      # FastAPI application entry
 ├── init_db.py                   # Database initialization
+├── create_soul.py               # Soul character creation script
 ├── start_server.py              # Server startup script
 └── requirements.txt             # Python dependencies
 ```

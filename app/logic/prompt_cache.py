@@ -17,14 +17,14 @@ from ..core.ids import generate_pk_id
 
 class PromptCache:
     """提示词缓存管理器"""
-    
+
     def __init__(self):
         # 初始化文本嵌入模型
         self.embedder = SentenceTransformer('all-MiniLM-L6-v2')
-        
+
         # 停用词列表
         self.stopwords = {
-            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", 
+            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
             "of", "with", "by", "is", "are", "was", "were", "be", "been", "being",
             "have", "has", "had", "do", "does", "did", "will", "would", "could", "should"
         }
@@ -122,81 +122,98 @@ class PromptCache:
         return key_norm, key_hash, pk_id
     
     def find_similar_prompt_key(
-        self, 
-        db: Session, 
-        soul_id: str, 
-        cue: str, 
+        self,
+        db: Session,
+        soul_id: str,
+        cue: str,
         threshold: float = 0.85
     ) -> Optional[PromptKeyBase]:
         """
         查找相似的提示词键
-        
+
         Args:
             db: 数据库会话
             soul_id: Soul ID
             cue: 提示词
             threshold: 相似度阈值
-            
+
         Returns:
             相似的PromptKey或None
         """
-        # 1. 先尝试精确匹配
-        key_norm, key_hash, pk_id = self.generate_cache_key(cue, soul_id, db)
-        exact_match = PromptKeyDAL.find_similar(db, soul_id, key_hash)
-        if exact_match:
-            return exact_match
-        
-        # 2. 使用嵌入向量进行相似性匹配
-        cue_embedding = self.embedder.encode(key_norm)
-        
-        # 获取该Soul的所有提示词键
-        all_pks = PromptKeyDAL.list_by_soul(db, soul_id)
-        
-        best_match = None
-        best_similarity = 0.0
-        
-        for pk in all_pks:
-            if pk.key_embed is not None:
-                # 将bytes转换回numpy数组
-                stored_embedding = np.frombuffer(pk.key_embed, dtype=np.float32)
-                
-                # 计算余弦相似度
-                similarity = self._cosine_similarity(cue_embedding, stored_embedding)
-                
-                if similarity >= threshold and similarity > best_similarity:
-                    best_similarity = similarity
-                    best_match = pk
-        
-        return best_match
+        try:
+            # 1. 先尝试精确匹配
+            key_norm, key_hash, pk_id = self.generate_cache_key(cue, soul_id, db)
+            exact_match = PromptKeyDAL.find_similar(db, soul_id, key_hash)
+            if exact_match:
+                return exact_match
+
+            # 2. 使用嵌入向量进行相似性匹配
+            try:
+                cue_embedding = self.embedder.encode(key_norm)
+            except Exception as e:
+                print(f"Warning: Failed to encode cue embedding: {e}")
+                return None
+
+            # 获取该Soul的所有提示词键
+            try:
+                all_pks = PromptKeyDAL.list_by_soul(db, soul_id)
+            except Exception as e:
+                print(f"Warning: Failed to list prompt keys for soul {soul_id}: {e}")
+                return None
+
+            best_match = None
+            best_similarity = 0.0
+
+            for pk in all_pks:
+                if pk.key_embed is not None:
+                    try:
+                        # 将bytes转换回numpy数组
+                        stored_embedding = np.frombuffer(pk.key_embed, dtype=np.float32)
+
+                        # 计算余弦相似度
+                        similarity = self._cosine_similarity(cue_embedding, stored_embedding)
+
+                        if similarity >= threshold and similarity > best_similarity:
+                            best_similarity = similarity
+                            best_match = pk
+                    except Exception as e:
+                        print(f"Warning: Failed to compare embeddings for pk {pk.pk_id}: {e}")
+                        continue
+
+            return best_match
+
+        except Exception as e:
+            print(f"Warning: Error in find_similar_prompt_key: {e}")
+            return None
     
     def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
         """计算余弦相似度"""
         return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
     
     def create_prompt_key(
-        self, 
-        db: Session, 
-        soul_id: str, 
-        cue: str, 
+        self,
+        db: Session,
+        soul_id: str,
+        cue: str,
         meta_json: Optional[Dict[str, Any]] = None
     ) -> PromptKeyBase:
         """
         创建新的提示词键
-        
+
         Args:
             db: 数据库会话
             soul_id: Soul ID
             cue: 提示词
             meta_json: 元数据
-            
+
         Returns:
             创建的PromptKey
         """
         key_norm, key_hash, pk_id = self.generate_cache_key(cue, soul_id, db)
-        
+
         # 生成嵌入向量
         embedding = self.embedder.encode(key_norm)
-        
+
         # 创建PromptKey
         pk_data = PromptKeyBase(
             pk_id=pk_id,
@@ -207,7 +224,7 @@ class PromptCache:
             meta_json=meta_json or {},
             updated_at_ts=now_ms()
         )
-        
+
         PromptKeyDAL.create(db, pk_data)
         return pk_data
 

@@ -209,11 +209,11 @@ class WanImageGenerationService:
         for result in rsp.output.results:
             image_url = result.url
             print(f"图像URL: {image_url}")
-            
+
             # 下载图像
             image_path = await self._download_image(image_url, output_filename, len(image_paths))
             image_paths.append(str(image_path))
-            image_urls.append(f"/generated/{image_path.name}")
+            image_urls.append(image_url)  # 返回完整的阿里云 OSS URL 而不是相对路径
         
         image_generation_time = time.time() - start_time
         

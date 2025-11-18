@@ -28,6 +28,9 @@ from .place_chooser import PlaceChooser
 # 配置 DashScope API
 dashscope.base_http_api_url = config.WAN_API_BASE_URL
 
+# 公网地址配置（用于生成的媒体文件访问）
+PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "http://36.138.179.204:8000")
+
 
 class WanVideoGenerationService:
     """Wan 文本到视频生成服务"""
@@ -113,7 +116,7 @@ class WanVideoGenerationService:
         print("等待视频生成完成...")
         max_retries = 5  # 增加重试次数
         retry_count = 0
-        max_wait_time = 600  # 最大等待时间（秒）
+        max_wait_time = 1200  # 最大等待时间（秒）- 改为 20 分钟，因为 Wan API 视频生成需要 10-15 分钟
         start_wait_time = time.time()
         last_status = None
         
@@ -223,15 +226,21 @@ class WanVideoGenerationService:
         mp4_path = await self._download_video(video_url, output_filename)
         
         video_generation_time = time.time() - start_time
-        
+
+        # 返回完整的公网 URL
+        mp4_relative_url = f"/static/videos/{mp4_path.name}"
+        mp4_public_url = f"{PUBLIC_API_URL}{mp4_relative_url}"
+
         result = {
             "mp4_path": str(mp4_path),
-            "mp4_url": f"/static/videos/{mp4_path.name}",
+            "mp4_url": mp4_public_url,  # 返回完整的公网 URL
             "video_filename": mp4_path.name,
             "video_size_mb": round(mp4_path.stat().st_size / 1024 / 1024, 2),
             "video_generation_seconds": round(video_generation_time, 2),
             "task_id": task_id
         }
+
+        print(f"MP4 URL: {mp4_public_url}")
         
         # 转换为GIF
         if generate_gif:
@@ -241,16 +250,21 @@ class WanVideoGenerationService:
             gif_path = await self._convert_mp4_to_gif(str(mp4_path))
             
             gif_conversion_time = time.time() - gif_start_time
-            
+
+            # 返回完整的公网 URL
+            gif_relative_url = f"/static/videos/{gif_path.name}"
+            gif_public_url = f"{PUBLIC_API_URL}{gif_relative_url}"
+
             result.update({
                 "gif_path": str(gif_path),
-                "gif_url": f"/static/videos/{gif_path.name}",
+                "gif_url": gif_public_url,  # 返回完整的公网 URL
                 "gif_filename": gif_path.name,
                 "gif_size_mb": round(gif_path.stat().st_size / 1024 / 1024, 2),
                 "gif_conversion_seconds": round(gif_conversion_time, 2)
             })
-            
+
             print(f"GIF已生成: {gif_path}")
+            print(f"GIF URL: {gif_public_url}")
         
         total_time = time.time() - start_time
         result["total_seconds"] = round(total_time, 2)
@@ -427,8 +441,9 @@ class WanVideoGenerationService:
         gif_filename = video_result.get("gif_filename", "")
         
         storage_key = f"soul/{soul_id}/wan/key/{similar_pk.pk_id if similar_pk else 'new'}/variant/{variant_id}.mp4"
-        mp4_url = f"/static/videos/{mp4_filename}"
-        gif_url = f"/static/videos/{gif_filename}" if gif_filename else ""
+        # 返回完整的公网 URL（已经在 generate_video_from_text 中生成）
+        mp4_url = video_result["mp4_url"]  # 这已经是完整的公网 URL
+        gif_url = video_result.get("gif_url", "")  # 这已经是完整的公网 URL
         
         # 6. 创建或更新提示词键
         if not similar_pk:

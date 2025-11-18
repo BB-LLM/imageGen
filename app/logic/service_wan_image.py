@@ -22,6 +22,9 @@ from ..core.lww import now_ms
 # 配置 DashScope API
 dashscope.base_http_api_url = config.WAN_API_BASE_URL
 
+# 公网地址配置（用于生成的媒体文件访问）
+PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "http://36.138.179.204:8000")
+
 
 class WanImageGenerationService:
     """Wan 文本到图像生成服务"""
@@ -205,7 +208,7 @@ class WanImageGenerationService:
         # 下载图像
         image_paths = []
         image_urls = []
-        
+
         for result in rsp.output.results:
             image_url = result.url
             print(f"图像URL: {image_url}")
@@ -213,7 +216,11 @@ class WanImageGenerationService:
             # 下载图像
             image_path = await self._download_image(image_url, output_filename, len(image_paths))
             image_paths.append(str(image_path))
-            image_urls.append(image_url)  # 返回完整的阿里云 OSS URL 而不是相对路径
+            # 返回完整的公网 URL（使用 /static/image/ 路由）
+            image_relative_url = f"/static/image/{image_path.name}"
+            image_public_url = f"{PUBLIC_API_URL}{image_relative_url}"
+            image_urls.append(image_public_url)
+            print(f"图像公网URL: {image_public_url}")
         
         image_generation_time = time.time() - start_time
         

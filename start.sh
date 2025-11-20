@@ -16,10 +16,10 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # 配置
-PROJECT_DIR="/home/zouwuhe/telegrambot/imageGen"
+PROJECT_DIR="/home/hongxda/imageGen"
 LOG_DIR="${PROJECT_DIR}/logs"
 LOG_FILE="${LOG_DIR}/imagegen_$(date +%Y%m%d_%H%M%S).log"
-VENV_DIR="${PROJECT_DIR}/soul"
+VENV_DIR="${PROJECT_DIR}/venv"
 API_PORT=8000
 
 # 创建日志目录
@@ -41,7 +41,7 @@ if [ ! -d "$VENV_DIR" ]; then
     echo -e "${RED}❌ 错误: 虚拟环境不存在: $VENV_DIR${NC}"
     echo -e "${YELLOW}请先创建虚拟环境:${NC}"
     echo -e "  cd $PROJECT_DIR"
-    echo -e "  python3.10 -m venv soul"
+    echo -e "  python3.10 -m venv venv"
     exit 1
 fi
 
@@ -108,8 +108,8 @@ echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}  服务信息${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo -e "${GREEN}进程号 (PID): $SERVICE_PID${NC}"
-echo -e "${GREEN}服务地址: http://36.138.179.204:8000${NC}"
-echo -e "${GREEN}API 文档: http://36.138.179.204:8000/docs${NC}"
+echo -e "${GREEN}服务地址: http://34.148.94.241:8000${NC}"
+echo -e "${GREEN}API 文档: http://34.148.94.241:8000/docs${NC}"
 echo -e "${GREEN}日志文件: $LOG_FILE${NC}"
 echo ""
 echo -e "${YELLOW}💡 提示:${NC}"

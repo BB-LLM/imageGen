@@ -29,7 +29,7 @@ from .place_chooser import PlaceChooser
 dashscope.base_http_api_url = config.WAN_API_BASE_URL
 
 # 公网地址配置（用于生成的媒体文件访问）
-PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "http://36.138.179.204:8000")
+PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "http://34.148.94.241:8000")
 
 
 class WanVideoGenerationService:

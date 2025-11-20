@@ -79,15 +79,22 @@ class ImageGenerationService:
                 if similar_pk:
                     # 2. 获取现有变体
                     existing_variants = VariantDAL.list_by_pk_id(db, similar_pk.pk_id)
-                    
-                    # 3. 获取用户已看过的变体
-                    user_seen_variants = UserSeenDAL.get_seen_variants(db, user_id)
-                    
-                    # 4. 过滤未看过的变体
-                    unseen_variants = [
-                        v for v in existing_variants 
-                        if v.variant_id not in user_seen_variants
+
+                    # 过滤图像变体（通过 meta_json 中的 type 字段，排除视频）
+                    image_variants = [
+                        v for v in existing_variants
+                        if v.meta_json and v.meta_json.get('type') in ['wan_image', 'wan_image_selfie']
                     ]
+
+                    if image_variants:
+                        # 3. 获取用户已看过的变体
+                        user_seen_variants = UserSeenDAL.get_seen_variants(db, user_id)
+
+                        # 4. 过滤未看过的变体
+                        unseen_variants = [
+                            v for v in image_variants
+                            if v.variant_id not in user_seen_variants
+                        ]
                     
                     if unseen_variants:
                         # 5. 选择最佳变体（最新的）

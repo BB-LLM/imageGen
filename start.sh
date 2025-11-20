@@ -17,9 +17,10 @@ NC='\033[0m' # No Color
 
 # 配置
 PROJECT_DIR="/home/zouwuhe/telegrambot/imageGen"
-LOG_DIR="/home/zouwuhe/telegrambot/logs"
+LOG_DIR="${PROJECT_DIR}/logs"
 LOG_FILE="${LOG_DIR}/imagegen_$(date +%Y%m%d_%H%M%S).log"
 VENV_DIR="${PROJECT_DIR}/soul"
+API_PORT=8000
 
 # 创建日志目录
 mkdir -p "$LOG_DIR"
@@ -52,6 +53,24 @@ echo ""
 # 进入项目目录
 cd "$PROJECT_DIR"
 
+# 检查并清理端口 8000
+echo -e "${YELLOW}🔍 检查端口 $API_PORT 是否被占用...${NC}"
+EXISTING_PIDS=$(lsof -ti :$API_PORT 2>/dev/null || true)
+
+if [ -n "$EXISTING_PIDS" ]; then
+    echo -e "${YELLOW}⚠️  发现端口 $API_PORT 已被占用，正在清理旧进程...${NC}"
+    for PID in $EXISTING_PIDS; do
+        PROCESS_INFO=$(ps -p $PID -o cmd --no-headers 2>/dev/null || echo "未知进程")
+        echo -e "${YELLOW}  停止进程 $PID: $PROCESS_INFO${NC}"
+        kill -9 $PID 2>/dev/null || true
+    done
+    sleep 1
+    echo -e "${GREEN}✅ 旧进程已清理${NC}"
+else
+    echo -e "${GREEN}✅ 端口 $API_PORT 可用${NC}"
+fi
+echo ""
+
 # 启动服务（后台运行，输出到日志）
 echo -e "${YELLOW}🚀 启动 imageGen 服务...${NC}"
 echo "启动时间: $(date)" > "$LOG_FILE"
@@ -66,8 +85,11 @@ source "$VENV_DIR/bin/activate" 2>/dev/null || {
     exit 1
 }
 
-# 启动服务（后台运行）
-python main.py >> "$LOG_FILE" 2>&1 &
+# 设置环境变量，禁用 DEBUG 模式
+export DEBUG=False
+
+# 启动服务（后台运行，使用 setsid + nohup 确保进程完全从终端分离）
+setsid nohup python main.py >> "$LOG_FILE" 2>&1 &
 SERVICE_PID=$!
 
 # 等待服务启动

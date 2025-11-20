@@ -11,7 +11,8 @@ dashscope.base_http_api_url = 'https://dashscope.aliyuncs.com/api/v1'
 
 # 若没有配置环境变量，请用百炼API Key将下行替换为：api_key="sk-xxx"
 # 新加坡和北京地域的API Key不同。获取API Key：https://help.aliyun.com/zh/model-studio/get-api-key
-api_key = os.getenv("DASHSCOPE_API_KEY", 'sk-6784fed83e4040269a6a0cbfa6cc9469')
+# api_key = os.getenv("DASHSCOPE_API_KEY", 'sk-6784fed83e4040269a6a0cbfa6cc9469')
+api_key = os.getenv("DASHSCOPE_API_KEY", 'sk-dd7ca82994dd4b2e8f83d2ca0945d29d')
 
 
 def async_call():

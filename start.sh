@@ -87,7 +87,7 @@ source "$VENV_DIR/bin/activate" 2>/dev/null || {
 
 # 设置环境变量，禁用 DEBUG 模式
 export DEBUG=False
-
+export PUBLIC_API_URL="http://34.148.94.241:8000"
 # 启动服务（后台运行，使用 setsid + nohup 确保进程完全从终端分离）
 setsid nohup python main.py >> "$LOG_FILE" 2>&1 &
 SERVICE_PID=$!
